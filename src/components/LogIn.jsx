@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast, ToastContainer } from "react-toastify";
@@ -9,6 +10,66 @@ const LogIn = () => {
     email: "",
     password: "",
   });
+
+  
+  const getCookie = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+  };
+
+  const refreshAccessToken = async () => {
+    try {
+      const response = await fetch(
+        "https://api.freeapi.app/api/v1/users/refresh-token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            refreshToken: getCookie("refreshToken"),
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (data.accessToken) {
+        document.cookie = `accessToken=${data.accessToken}; path=/`;
+        return data.accessToken;
+      } else {
+        throw new Error("Unable to refresh token");
+      }
+    } catch (error) {
+      console.error("Refresh token error:", error);
+      return null;
+    }
+  };
+
+
+  const fetchWithAuth = async (url, options = {}) => {
+    let accessToken = getCookie("accessToken");
+
+    options.headers = {
+      ...options.headers,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    };
+
+    let response = await fetch(url, options);
+
+    
+    if (response.status === 401) {
+      accessToken = await refreshAccessToken();
+      if (accessToken) {
+        options.headers.Authorization = `Bearer ${accessToken}`;
+        response = await fetch(url, options);
+      }
+    }
+
+    return response;
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -32,13 +93,15 @@ const LogIn = () => {
       );
 
       const data = await response.json();
-
       if (data.message === "User does not exist") {
         toast.error(data.message);
       } else if (data.message === "User logged in successfully") {
+ 
         document.cookie = `accessToken=${data.data.accessToken}; path=/`;
+        document.cookie = `refreshToken=${data.data.refreshToken}; path=/`;
+
         toast.success(data.message);
-        setTimeout(() => navigate("/"), 1000); 
+        setTimeout(() => navigate("/registeredUser"), 2000);
       } else {
         toast.error(data.message || "Something went wrong!");
       }
